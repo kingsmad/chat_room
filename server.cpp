@@ -2,6 +2,7 @@
 #include <thread>
 #include <chrono>
 #include <unistd.h>
+#include <assert.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
@@ -13,15 +14,51 @@ const int max_file_sz = 1e6 + 10;
 
 using namespace std;
 
-int start() {
-    // re-init
+void Trie::insert(char* s, int len, int fd) {
+    int u = 0;
+    for(int i=0; i<len; ++i) {
+        int c = idx(s[i]);
+        if (!ch[u][c]) {
+            memset(ch[sz], 0, sizeof(ch[sz]));
+            ch[u][c] = sz++;
+        }
+        u = ch[u][c];
+        ++val[u];
+    }
+    fds[u] = fd; 
+}
+
+int Trie::find(char* s, int len) {
+    int t = 0, u = 0;
+    for(int i=0; i<len; ++i) {
+        int c = idx(s[i]);
+        if (!ch[u][c]) return -1;
+        u = ch[u][c];
+    }
+    return fds[u];
+}
+
+void Trie::del(char* s, int len) {
+    int u = 0;
+    for(int i=0; i<len; ++i) {
+        int c = idx(s[i]);
+        int tu = ch[u][c]; 
+        if (--val[ch[u][c]]<=0) ch[u][c]=0;
+        u = tu;
+    }
+    fds[u] = -1;
+}
+
+int Server::start() {
+    // re-init, close fds
     if (lsnfd) close(lsnfd);
     if (connfd) close(connfd);
     if (nfds) close(nfds);
     if (epollfd) close(epollfd);
-    trie.init();
+
+    // clear db
+    trie.clear();
     fd2str.clear();
-    for(int td: 
 
     setup_listen();    
     th_monitor = thread(monitor);
@@ -43,14 +80,23 @@ int Server::setnonblocking(int fd) {
 
     return 0;
 }
+
+int Server::file_size(int fd) {
+    struct stat s;
+    if (fstat(fd, &s) == -1) {
+        buginfo("\nfstat error;\n");
+        return -1;
+    }
+    return s.st_size;
+}
+
 int Server::local_ip_address(struct sockaddr_in* res, int port) {
-    bool ok;
     struct ifaddrs* addrs;
     getifaddrs(&addrs);
     
     struct sockaddr_in* cur_addr = NULL;
     for (struct ifaddrs* p=addrs; p->ifa_next; p=p->ifa_next;) {
-        if (p->ifa_addr->sa_family==AF_INET && strcmp(p->ifa_name, 'en0')) {
+        if (p->ifa_addr->sa_family==AF_INET && strcmp(p->ifa_name, "en0")) {
             cur_addr = (struct sockaddr_in*) p->ifa_addr;
         }
     }
@@ -69,12 +115,13 @@ int Server::setup_listen () {
     if (lsnfd != 0) close(lsnfd);
 
     lsnfd = socket(AF_INET, SOCK_STREAM, 0);
+    // set reusable
     optval = 1;
     setsockopt(lsnfd, SOL_SOCKET, SO_REUSEADDR, (const void*)&optval, sizeof(int)); 
 
+    // get ip-address
     struct sockaddr_in sv_addr;
-    local_ip_address(sv_addr, 8080);
-    if (res == -1) {
+    if (local_ip_address(&sv_addr, def_port) < 0) 
         printf("\nFailed to get IP address, check your network!\n");
         return -1;
     }
@@ -83,6 +130,7 @@ int Server::setup_listen () {
         printf("\n Error in Binding lsnfd...\n");
         return -1;
     }
+
     if (listen(lsnfd, 10) < 0) {
         buginfo("\nFailed in listening...\n");
         return -1;
@@ -91,6 +139,7 @@ int Server::setup_listen () {
     return 0;
 }
 
+// monitor the fds, process incoming data
 int Server::monitor () {
     epollfd = epoll_create1(0);
     ev.events = EPOLLIN;
@@ -108,10 +157,10 @@ int Server::monitor () {
                 /*In our case, this must be sth wrong*/
                 buginfo("epoll error\n");
                 close(events[i].data.fd);
-                del(events[i].data.fd);
+                delfd(events[i].data.fd);
                 continue;
             }
-            if (events[i].data.fd == lsnfd) {
+            if (events[i].data.fd == lsnfd) { // new connection coming
                 struct sockaddr_in addr;
                 int len = sizeof(sockaddr_in);
                 connfd = accept(lsnfd, (struct sockaddr_in*)&addr, &len); 
@@ -119,7 +168,7 @@ int Server::monitor () {
                     buginfo("accepted wrong connfd...\n");
                     return -1;
                 }
-                setnonblocking(connfd);
+                setnonblocking(connfd); //ET needs non-blocking
                 ev.events = EPOLL | EPOLLET;
                 ev.data.fd = connfd;
                 if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &ev) == -1) {
@@ -133,6 +182,7 @@ int Server::monitor () {
     }
 }
 
+// do processing while new data coming.
 void Server::process(int sock) {
     // extract header;
     char buf = (char*)malloc(1024);
@@ -149,36 +199,40 @@ void Server::process(int sock) {
         process_msg(sock, buf, sizeof(buf), offset);
     else 
         process_file(sock, buf, sizeof(buf), offset);
+    free(buf);
 }
 
-int Server::get_namelist(int sock, char* buf, int buf_len, int& offset, vector<int>& ans) {
-    // size of namestrings 
-    int szst = offset;
-    while(offset < szst+4)
-        offset += read(sock, buf+offset, szst+4-offset);
+int Server::get_namelist(int sock, char* buf, int& offset, vector<int>& ans) {
+    // read flg && name-strings-size: 5 bytes total 
+    int flgst = offset;
+    int szst = offset+1;
+    while(offset < flgst+5)
+        offset += read(sock, buf+offset, flgst+5-offset);
     uint32_t sz = 0;
     memcpy(&sz, buf+szst, 4);
     sz = ntohl(sz);
+    int flg = buf[flgst]; // flg indicates whether it's blacklist
 
-    // name fd lists
+    // read name strings 
     int strst = offset;
     while(offset < strst+sz) 
         offset += read(sock, buf+offset, strst+sz-offset);
     
+    // query from trie, get fds
     set<int> tfds;
     for(int i=strst; i<strst+sz; ) {
         int j = i+1;
         while(j<strst+sz && buf[j]!=0) ++j;
-        int cfd = trie.query(buf+strst, sz); 
+        int cfd = trie.find(buf+i, j-i); 
         if (cfd > 0) tfds.insert(cfd);
     }
         
     // write ans
     ans.clear();
-    if (buf[1] == 0) {
+    if (flg == 0) {
         ans.resize(tfds.size());
         copy(tfds.begin(), tfds.end(), ans.begin());
-    } else if(buf[1] == 1) {
+    } else if(flg == 1) {
         for (auto c=fdset.begin(); c!=fdset.end(); ++c) {
             if (tfds.count(*c) > 0) continue;
             ans.push_back(*c);
@@ -202,20 +256,30 @@ int Server::delfd(int fd) {
 }
 
 int Server::process_reg(int sock, char* buf, int buf_len, int offset) {
-    int st = 6, lst = st;
-    while(buf[lst] != 0) ++lst;
-
+    // read name size
+    int naszst = offset;
+    while(offset < naszst+4) 
+        offset += read(sock, buf+offset, naszst+4-offset);
+    uint32_t nasz = 0;
+    copy(buf+naszst, buf+naszst+4, (char*)&nasz);
+    nasz = ntohl(nasz);
+    
+    // read name string
+    int nast = offset;
+    while(offset < nast + nasz) // nasz included the last '\0'
+        offset += read(sock, buf+offset, nast+nasz-offset); 
+    
     // check if this is a rename
     if (fd2str.count(sock) > 0) {
         del_fdinfo(sock);
     }
 
     // update information
-    trie.insert(buf+st, lst-st, sock);
-    char* str = (char*)malloc(lst-st+1);
-    copy(buf+st, lst-st+1, str);
-    fd2str.insert(make_pair(sock, str));  
-
+    trie.insert(buf+nast, nasz, sock);
+    char* str = (char*) malloc(nasz);
+    copy(buf+nast, buf+nast+nasz, str);
+    fd2str.insert(make_pair(sock, str));
+   
     return 0;
 }
 
@@ -223,11 +287,13 @@ int Server::process_msg(int sock, char* buf, int buf_len, int offset) {
     vector<int> name_fds;
     get_namelist(sock, buf, buf_len, offset, name_fds); 
 
-    // data size
+    // msg size
+    int msgszst = offset;
+    while(offset < msgszst+4)
+        offset += read(sock, buf+offset, msgszst+4-offset);
     unit32_t tsz = 0;
-    read(sock, (char*)&tsz, 4);
+    memcpy(&tsz, buf+msgszst, 4);
     tsz = ntohl(tsz);
-    offset += 4;
 
     // read all
     int msgst = offset;
@@ -240,10 +306,10 @@ int Server::process_msg(int sock, char* buf, int buf_len, int offset) {
 
         // add sender's name
         char* p = fd2str[sock];
-        int plen = strlen(p);
+        int plen = strlen(p)+1; // inlcude last '\0'
         int a = htonl(plen);
         write(fd, &a, 4);  
-        write(fd, p, plen+1);
+        write(fd, p, plen);
 
         write(fd, msgst, 4);
         write(fd, buf+msgst, tsz); 
@@ -251,7 +317,6 @@ int Server::process_msg(int sock, char* buf, int buf_len, int offset) {
 }
 
 int Server::process_file(int sock, char* buf, int buf_len, int offset) {
-    int segst = offset;
     vector<int> name_fds;
     get_namelist(sock, buf, buf_len, offset, name_fds);
 
@@ -259,40 +324,53 @@ int Server::process_file(int sock, char* buf, int buf_len, int offset) {
     int fszst = offset;
     offset += read(sock, buf+offset, 8);
     uint32_t tsz = 0, nasz = 0;
-    copy(buf+segst, buf+segst+4, (char*)tsz);
-    copy(buf+segst+4, buf+segst+8, (char*)nasz);
+    copy(buf+fszst, buf+fszst+4, (char*)tsz);
+    copy(buf+fszst+4, buf+fszst+8, (char*)nasz);
     tsz = ntohl(tsz);
     nasz = ntohl(nasz);
 
     // get file-name
     int namest = offset;
-    while(offset < buf+namest+nasz)
-        offset += read(sock, buf+offset, buf+namest+nasz-offset); 
+    while(offset < namest+nasz)
+        offset += read(sock, buf+offset, namest+nasz-offset); 
 
     // save file
     int filest = offset;
-    while( offset < filest+tsz) 
-        offset += read(sock, buf+offset, filest+tsz-offset);
-    int file = open(buf+namest, O_CREAT | O_TRUNC);
-    write(file, buf+filest, tsz);
+    int file = open(buf+namest, O_CREAT | O_TRUNC | O_WRONLY);
+    if (file < 0) {
+        buginfo("\n Failed to open file: %s\n", buf+namest);
+        return -1;
+    }
+    sendfile(file, sock, 0, tsz);
+    close(file);
 
-    // send file
-    for (int fd: name_fds) {
+    // assemble segment && send file
+    file = open(buf+namest, O_RDONLY, 0644);
+    assert(tsz == file_size(file));
+    if (file < 0) {
+        buginfo("\n Re-open file %s error!\n", buf+namest);
+        return -1;
+    }
+    for (int fd: name_fds) { // can be concurrent in future;
         optval = 1;
         setsockopt(fd, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));
          
         write(fd, buf, 1); // 1 byte type
+
         // add sender's name
         char* p = fd2str[sock];
-        int plen = strlen(p);
+        assert(p!=0);
+        int plen = strlen(p)+1;
         int a = htonl(plen);
-        write(fd, &a, 4);  
-        write(fd, p, plen+1);
+        write(fd, &a, 4); // source-name-size 
+        write(fd, p, plen); // source-name
 
         // filesz 4 bytes and filename
         write(fd, buf+fszst, filest-fszst); 
+
         // file content
-        write(fd, buf+filest, offset-filest);
+        int out_offset = 0;
+        sendfile(fd, file, &out_offset, tsz); 
 
         optval = 0;
         setsockopt(fd, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));
