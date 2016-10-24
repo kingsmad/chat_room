@@ -1,12 +1,18 @@
 #include "client.h"
 #include <poll.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h> 
 #include <fcntl.h>
+#include <assert.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <cstring>
+#include <sys/sendfile.h>
 using namespace std;
 const bool debug = false;
 void buginfo(const char* f, ...) {if(!debug)return;va_list al; va_start(al, f);vprintf(f, al);va_end(al);}
@@ -28,7 +34,7 @@ int Client::set_uint32(char* s, int k) {
     } tmp;
 
     tmp.d = htonl(k);
-    copy(tmp.b, tmp.b+4, buf);
+    copy(tmp.b, tmp.b+4, s);
 
     return 0;
 }
@@ -48,15 +54,17 @@ int Client::create_and_connect(const char* s, int len, int port) {
     // create
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in serveraddr;
-    inet_pton(AF_INET, s, &serveraddr.in_addr);
+    inet_pton(AF_INET, s, &serveraddr.sin_addr);
     serveraddr.sin_port = htonl(port);
     serveraddr.sin_family = AF_INET;
 
     // connect
-    if (connect(sock, &serveraddr, sizeof(serveraddr)) < 0) {
+    if (connect(sock, (struct sockaddr*)&serveraddr, sizeof(serveraddr)) < 0) {
         buginfo("Connect Failed!\n");
         return -1;
     }
+
+    return 0;
 }
 
 void Client::set_namelist(char* buf, int& offset, vector<char*>& namev) {
@@ -75,11 +83,11 @@ void Client::set_namelist(char* buf, int& offset, vector<char*>& namev) {
 
 int Client::send_file(const char* s, int len, bool block, vector<char*>& namev) {
     /*The header of the file-msg is fixed to be 
-     * less than 1024*/
+     * less than buf_size*/
     assert(len == strlen(s));
-    char buf = (char*)malloc(1024);
+    char* buf = (char*)malloc(buf_size);
     int offset = 0;
-    memset(buf, 0, sizeof(buf));
+    memset(buf, 0, sizeof(buf_size));
 
     // type and flg
     buf[offset++] = 2;
@@ -115,15 +123,17 @@ int Client::send_file(const char* s, int len, bool block, vector<char*>& namev) 
     setsockopt(sock, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));
 
     free(buf);
+
+    return 0;
 }
 
 
-void Client::send_msg(const char* s, int len, bool block, vector<char*> namev) {
+int Client::send_msg(const char* s, int len, bool block, vector<char*>& namev) {
     /*The header of the file-msg is fixed to be 
-     * less than 1024*/
-    char* buf = (char*)malloc(1024*2);
+     * less than buf_size*/
+    char* buf = (char*)malloc(buf_size*2);
     int offset = 0;
-    memset(buf, 0, sizeof(buf));
+    memset(buf, 0, sizeof(buf_size*2));
 
     // type and flg
     buf[offset++] = 1;
@@ -142,9 +152,11 @@ void Client::send_msg(const char* s, int len, bool block, vector<char*> namev) {
     write(sock, buf, offset);
 
     free(buf);
+
+    return 0;
 }
 
-void Client::send_reg(const char* s, int len) {
+int Client::send_reg(const char* s, int len) {
     assert(len == strlen(s));
     char* buf = (char*) malloc(100);
     int offset = 0;
@@ -162,14 +174,15 @@ void Client::send_reg(const char* s, int len) {
     write(sock, buf, offset);
 
     free(buf);
+    return 0;
 }
 
 void Client::monitor() {
-    char* buf = (char*)malloc(1024);
+    char* buf = (char*)malloc(buf_size);
     int offset = 0;
     while(true) {
         offset = 0;
-        memset(buf, 0, sizeof(buf));
+        memset(buf, 0, sizeof(buf_size));
         offset += read(sock, buf, 1); 
         if (buf[0] == 1) { // it's message
             process_msg(buf, offset);
@@ -186,7 +199,7 @@ void Client::process_file(char* buf, int offset) {
     int naszst = offset;
     while(offset < naszst+4)
         offset += read(sock, buf+offset, naszst+4-offset);
-    int nasz = get_uint32(buf+nasazt);
+    int nasz = get_uint32(buf+naszst);
 
     // get source name: nasz bytes
     int nvst = offset;
@@ -195,7 +208,7 @@ void Client::process_file(char* buf, int offset) {
 
     // read file-size && file-name-size
     int fileszst = offset;
-    while(offest < fileszst+8)
+    while(offset < fileszst+8)
         offset += read(sock, buf+offset, fileszst+8-offset);
     int filesz = get_uint32(buf+fileszst);
     int fnamesz = get_uint32(buf+fileszst+4);
@@ -203,14 +216,14 @@ void Client::process_file(char* buf, int offset) {
     // read file name
     int fnamevst = offset;
     while(offset < fnamevst+fnamesz) 
-        offest += read(sock, buf+offset, fnamevst+fnamesz-offset);
+        offset += read(sock, buf+offset, fnamevst+fnamesz-offset);
 
     // open with this file
     int file = open(buf+fnamevst, O_CREAT | O_TRUNC | O_WRONLY);
     if (file < 0) {
-        printf("Got file: %s, but seems sth wrong in \ 
+        printf("Got file: %s, but seems sth wrong in \
                 creating it...", buf+fnamevst);
-        return 0;
+        return;
     }
     
     sendfile(file, sock, 0, filesz);
@@ -225,7 +238,7 @@ void Client::process_msg(char* buf, int offset) {
     int naszst = offset;
     while(offset < naszst+4)
         offset += read(sock, buf+offset, naszst+4-offset);
-    int nasz = get_uint32(buf+nasazt);
+    int nasz = get_uint32(buf+naszst);
 
     // get source name: nasz bytes
     int nvst = offset;

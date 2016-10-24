@@ -3,6 +3,7 @@
 using namespace std;
 
 class Client {
+    const int buf_size = 1024;
 private:
     int sock;
 private:
@@ -14,9 +15,9 @@ private:
     void process_msg(char* buf, int offset);
 public:
     int create_and_connect(const char* s, int len, int port);
-    void send_file(const char* s, int len, bool block, vector<char*> namev); 
-    void send_msg(const char*s, int len, bool block, vector<char*> namev);
-    void send_reg(const char* s, int len);
+    int send_file(const char* s, int len, bool block, vector<char*>& namev); 
+    int send_msg(const char*s, int len, bool block, vector<char*>& namev);
+    int send_reg(const char* s, int len);
     void monitor();
     void shutconn();
 };

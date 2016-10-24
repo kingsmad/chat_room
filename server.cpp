@@ -6,11 +6,20 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/epoll.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <ifaddrs.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <set>
+#include <sys/sendfile.h>
 #include "server.h"
 
-#define MAX_EVENTS 20
-const int max_file_sz = 1e6 + 10;
+const bool debug = false;
+void buginfo(const char* f, ...) {if(!debug)return;va_list al; va_start(al, f);vprintf(f, al);va_end(al);}
 
 using namespace std;
 
@@ -61,8 +70,18 @@ int Server::start() {
     fd2str.clear();
 
     setup_listen();    
-    th_monitor = thread(monitor);
 
+    run_concurrent(&Server::monitor);
+
+    return 0;
+}
+
+int Server::stop() {
+
+    return 0;
+}
+
+int Server::run_concurrent(Mfunc f) {
     return 0;
 }
 
@@ -73,7 +92,7 @@ int Server::setnonblocking(int fd) {
         buginfo("Fuck you.\n");
         return -1;
     }
-    flg |= O_NONBLOCK;
+    flg |= SOCK_NONBLOCK;
     if (fcntl(fd, F_SETFL, flg) == -1) {
         buginfo("Fuck you fcntl.\n");
     }
@@ -95,7 +114,7 @@ int Server::local_ip_address(struct sockaddr_in* res, int port) {
     getifaddrs(&addrs);
     
     struct sockaddr_in* cur_addr = NULL;
-    for (struct ifaddrs* p=addrs; p->ifa_next; p=p->ifa_next;) {
+    for (struct ifaddrs* p=addrs; p->ifa_next; p=p->ifa_next) {
         if (p->ifa_addr->sa_family==AF_INET && strcmp(p->ifa_name, "en0")) {
             cur_addr = (struct sockaddr_in*) p->ifa_addr;
         }
@@ -105,7 +124,7 @@ int Server::local_ip_address(struct sockaddr_in* res, int port) {
 
     cur_addr->sin_port = htons(port);
     cur_addr->sin_family = AF_INET;
-    *res = cur_addr;
+    memcpy(res, cur_addr, sizeof(sockaddr_in));
 
     freeifaddrs(addrs);
     return 0;
@@ -116,7 +135,7 @@ int Server::setup_listen () {
 
     lsnfd = socket(AF_INET, SOCK_STREAM, 0);
     // set reusable
-    optval = 1;
+    int optval = 1;
     setsockopt(lsnfd, SOL_SOCKET, SO_REUSEADDR, (const void*)&optval, sizeof(int)); 
 
     // get ip-address
@@ -154,8 +173,8 @@ int Server::monitor () {
     }
 
     while(true) {
-        nfds = wait(epollfd, events, MAX_EVNETS, -1);
-        for(i=0; i<nfds; ++i) {
+        nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+        for(int i=0; i<nfds; ++i) {
             if ((events[i].events & EPOLLERR) || (events[i].events \
                     & EPOLLHUP)) {
                 /*In our case, this must be sth wrong*/
@@ -166,14 +185,14 @@ int Server::monitor () {
             }
             if (events[i].data.fd == lsnfd) { // new connection coming
                 struct sockaddr_in addr;
-                int len = sizeof(sockaddr_in);
-                connfd = accept(lsnfd, (struct sockaddr_in*)&addr, &len); 
+                socklen_t len = sizeof(sockaddr_in);
+                connfd = accept(lsnfd, (struct sockaddr*)&addr, &len); 
                 if (connfd == -1) {
                     buginfo("accepted wrong connfd...\n");
                     return -1;
                 }
                 setnonblocking(connfd); //ET needs non-blocking
-                ev.events = EPOLL | EPOLLET;
+                ev.events = EPOLLIN | EPOLLET;
                 ev.data.fd = connfd;
                 if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &ev) == -1) {
                     buginfo("Config error in connfd...\n");
@@ -189,8 +208,8 @@ int Server::monitor () {
 // do processing while new data coming.
 void Server::process(int sock) {
     // extract header;
-    char buf = (char*)malloc(1024);
-    memset(buf, 0, sizeof(buf));
+    char* buf = (char*)malloc(buf_size);
+    memset(buf, 0, sizeof(buf_size));
     int offset = 0;
 
     while(offset < 1) 
@@ -237,9 +256,10 @@ int Server::get_namelist(int sock, char* buf, int& offset, vector<int>& ans) {
         ans.resize(tfds.size());
         copy(tfds.begin(), tfds.end(), ans.begin());
     } else if(flg == 1) {
-        for (auto c=fdset.begin(); c!=fdset.end(); ++c) {
-            if (tfds.count(*c) > 0) continue;
-            ans.push_back(*c);
+        for (auto it: fd2str) {
+            int p = it.first;
+            if (tfds.count(p) > 0) continue;
+            ans.push_back(p);
         }
     }
       
@@ -247,16 +267,19 @@ int Server::get_namelist(int sock, char* buf, int& offset, vector<int>& ans) {
 }
 
 int Server::del_fdinfo(int fd) {
-    if (fd2str.count(sock) == 0) return 0;
-    auto c = fd2str.find(sock);
+    if (fd2str.count(fd) == 0) return 0;
+    auto c = fd2str.find(fd);
     char* p = c->second;
     trie.del(p, strlen(p)); 
     fd2str.erase(c);
+    return 0;
 }
 
 int Server::delfd(int fd) {
     del_fdinfo(fd);
     close(fd);
+
+    return 0;
 }
 
 int Server::process_reg(int sock, char* buf, int buf_len, int offset) {
@@ -289,13 +312,13 @@ int Server::process_reg(int sock, char* buf, int buf_len, int offset) {
 
 int Server::process_msg(int sock, char* buf, int buf_len, int offset) {
     vector<int> name_fds;
-    get_namelist(sock, buf, buf_len, offset, name_fds); 
+    get_namelist(sock, buf, offset, name_fds); 
 
     // msg size
     int msgszst = offset;
     while(offset < msgszst+4)
         offset += read(sock, buf+offset, msgszst+4-offset);
-    unit32_t tsz = 0;
+    uint32_t tsz = 0;
     memcpy(&tsz, buf+msgszst, 4);
     tsz = ntohl(tsz);
 
@@ -315,21 +338,24 @@ int Server::process_msg(int sock, char* buf, int buf_len, int offset) {
         write(fd, &a, 4);  
         write(fd, p, plen);
 
-        write(fd, msgst, 4);
+        int t = htonl(msgst);
+        write(fd, (char*)&t, 4);
         write(fd, buf+msgst, tsz); 
     }
+
+    return 0;
 }
 
 int Server::process_file(int sock, char* buf, int buf_len, int offset) {
     vector<int> name_fds;
-    get_namelist(sock, buf, buf_len, offset, name_fds);
+    get_namelist(sock, buf, offset, name_fds);
 
     // file size and its' name-size
     int fszst = offset;
     offset += read(sock, buf+offset, 8);
     uint32_t tsz = 0, nasz = 0;
-    copy(buf+fszst, buf+fszst+4, (char*)tsz);
-    copy(buf+fszst+4, buf+fszst+8, (char*)nasz);
+    copy(buf+fszst, buf+fszst+4, (char*)&tsz);
+    copy(buf+fszst+4, buf+fszst+8, (char*)&nasz);
     tsz = ntohl(tsz);
     nasz = ntohl(nasz);
 
@@ -356,7 +382,7 @@ int Server::process_file(int sock, char* buf, int buf_len, int offset) {
         return -1;
     }
     for (int fd: name_fds) { // can be concurrent in future;
-        optval = 1;
+        int optval = 1;
         setsockopt(fd, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));
          
         write(fd, buf, 1); // 1 byte type
@@ -373,11 +399,12 @@ int Server::process_file(int sock, char* buf, int buf_len, int offset) {
         write(fd, buf+fszst, filest-fszst); 
 
         // file content
-        int out_offset = 0;
-        sendfile(fd, file, &out_offset, tsz); 
+        sendfile(fd, file, 0, tsz); 
 
         optval = 0;
         setsockopt(fd, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));
     }
+
+    return 0;
 }
 
