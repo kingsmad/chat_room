@@ -24,7 +24,8 @@
  * 
  * file:
  * type:1; source-name-size:4; source-name:some;
- * file-size:4; file:some;
+ * file-size:4; file-name-size:4; file-name:some;
+ * file:some;
  * */
 
 /*Attention:
@@ -46,22 +47,26 @@ struct Trie {
 
 class Server {
     const int def_port = 8087;
-    private:
-        struct epoll_event ev, events[MAX_EVENTS];
-        int lsnfd, connfd, nfds, epollfd;
-        Trie trie;
-        map<int, char*> fd2str;
-        thread th_monitor;
-    public:
-        void local_wifi_ipaddress(char* s);
-        int setup_listen();
-        void process(int sock);
-        int get_namelist(int sock, char* buf, int buf_len, int offset, vector<int>& ans);
-        int del_fdinfo(int fd);
-        int delfd(int fd);
-        int process_reg(int sock, char* buf, int buf_len, int offset);
-        int process_msg(int sock, char* buf, int buf_len, int offset);
-        int process_file(int sock, char* buf, int buf_len, int offset);
-        int start();
+private:
+    struct epoll_event ev, events[MAX_EVENTS];
+    int lsnfd, connfd, nfds, epollfd;
+    Trie trie;
+    map<int, char*> fd2str;
+    thread th_monitor;
+private:
+    int setnonblocking(int fd);
+    int file_size(int fd);
+    int local_ip_address(struct sockaddr_in* res, int port);
+    void process(int sock);
+    int get_namelist(int sock, char* buf, int buf_len, int offset, vector<int>& ans);
+    int del_fdinfo(int fd);
+    int delfd(int fd);
+    int process_reg(int sock, char* buf, int buf_len, int offset);
+    int process_msg(int sock, char* buf, int buf_len, int offset);
+    int process_file(int sock, char* buf, int buf_len, int offset);
+public:
+    int setup_listen();
+    int monitor());
+    int start();
 };
 

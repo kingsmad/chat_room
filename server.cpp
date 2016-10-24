@@ -121,7 +121,7 @@ int Server::setup_listen () {
 
     // get ip-address
     struct sockaddr_in sv_addr;
-    if (local_ip_address(&sv_addr, def_port) < 0) 
+    if (local_ip_address(&sv_addr, def_port) < 0) {
         printf("\nFailed to get IP address, check your network!\n");
         return -1;
     }
@@ -135,6 +135,10 @@ int Server::setup_listen () {
         buginfo("\nFailed in listening...\n");
         return -1;
     }
+
+    char s[48]; 
+    inet_ntop(AF_INET, &sv_addr, s, 30);
+    printf("\nsuccessfully Listening %s %d", s, def_port); 
 
     return 0;
 }
