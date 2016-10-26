@@ -3,6 +3,7 @@
 #include <thread>
 #include <vector>
 #include <cstring>
+#include <sys/epoll.h>
 
 /* Data segments server recieved
  * msg:

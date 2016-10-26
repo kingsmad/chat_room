@@ -33,5 +33,7 @@ ll powmod(ll a,ll b, ll MOD) {ll res=1;a%=MOD;for(;b;b>>=1){if(b&1)res=res*a%MOD
 void buginfo(const char* f, ...) {if(!debug)return;va_list al; va_start(al, f);vprintf(f, al);va_end(al);}
 /*------------------ head-------------------*/
 int main() {
+    Terminal terminal;
+    terminal.run();
 }
 
