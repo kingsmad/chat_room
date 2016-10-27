@@ -13,24 +13,30 @@ int Terminal::run() {
 }
 
 int terminal::parse() {
+    status = 0;
     vector<string> v;
     getstr(v);
     if (v[0] == "set") {
         if (v.size() < 2) 
             cout << "Correct usage: set server or set client 'IP address' 'port#' 'client name'"<< endl;
-        else if ((v[2] == "client") && (v.size() == 5)) {
-            client.create_and_connect(v[3], v[4], v[5]);
-        } else if (v[2] == "server") {
+        else if ((v[1] == "client") && (v.size() == 5)) {
+            client.create_and_connect(v[2], strlen(v[2]), stoi(v[3]));
+            client.send_reg(v[4].c_str, int len);
+        } else if (v[1] == "server") {
             server.start();
         } else {
             cout << "Correct usage: set server or set client 'IP address' 'port#' 'client name'" << endl;
         }
-    } else if(/*server condition*/){
-        parseServer(v);
-    } else if(/*client condition*/){
+    } else if(status == 1){
+        if(v[0] == "stop"){
+            server.stop();
+            return -1;
+        }
+    } else if(status == 2){
+        if(v[0] == "stop"){
+            return -1;
+        }
         parseClient(v);
-    } else if(v[0] == "stop"){
-        return -1;
     } else{
         cout << "wrong input" << endl;
     }
@@ -116,10 +122,6 @@ void Terminal::parseClient() {
     }
 }
 
-void Terminal::parseServer(){
-    //?
-}
-
 void Terminal::mblock2raw(vector<char*>& res) {
     for (int i = 0; i < mblock.size(); i++){
         const char* tmp = mblock[i].c_str();
@@ -152,5 +154,3 @@ void Terminal::getstr(vector<string>& v) {
     }
     return;
 }
-
-

@@ -10,6 +10,7 @@ private:
     Server server;
     set<string> mblock;
     set<string> mblock_bc;
+    int status; //0-non-set 1-server 2-client
     char buf[1024];
     void getstr(vector<string>& v);
     void mblock2raw(vector<char*>& res);
@@ -18,7 +19,6 @@ private:
 
 private:
     int parse();
-    void parseServer();
     void parseClient();
 public:
     int run();
