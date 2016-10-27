@@ -13,9 +13,9 @@ private:
     int status; //0-non-set 1-server 2-client
     char buf[1024];
     void getstr(vector<string>& v);
-    void mblock2raw(vector<const char*>& res);
-    void mblock_bc2raw(vector<const char*>& res);
-    void str2raw(vector<string> v, vector<const char*>& res, int start);
+    void mblock2raw(vector<char*>& res);
+    void mblock_bc2raw(vector<char*>& res);
+    void str2raw(vector<string> v, vector<char*>& res, int start);
 
 private:
     int parse();

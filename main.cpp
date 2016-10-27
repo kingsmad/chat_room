@@ -32,6 +32,9 @@ typedef pair<int, int> PII;
 ll powmod(ll a,ll b, ll MOD) {ll res=1;a%=MOD;for(;b;b>>=1){if(b&1)res=res*a%MOD;a=a*a%MOD;}return res;}
 void buginfo(const char* f, ...) {if(!debug)return;va_list al; va_start(al, f);vprintf(f, al);va_end(al);}
 /*------------------ head-------------------*/
+
+#include "terminal.h"
+
 int main() {
     Terminal terminal;
     terminal.run();

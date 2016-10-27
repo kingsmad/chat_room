@@ -16,10 +16,19 @@
 #include <sys/sendfile.h>
 #include "server.h"
 
-const bool debug = false;
-void buginfo(const char* f, ...) {if(!debug)return;va_list al; va_start(al, f);vprintf(f, al);va_end(al);}
-
+extern void buginfo(const char* f, ...);
 using namespace std;
+
+class Trie {
+public:
+    int ch[maxnode][sigma_size];
+    int val[maxnode], sz, fds[maxnode];
+    inline void clear() { sz=1; memset(ch[0], 0, sizeof(ch[0]));}
+    inline int idx(char c) { return c - '0';}
+    void insert(char* s, int len, int fd);
+    int find(char* s, int len);
+    void del(char* s, int len);
+};
 
 void Trie::insert(char* s, int len, int fd) {
     int u = 0;
@@ -36,7 +45,7 @@ void Trie::insert(char* s, int len, int fd) {
 }
 
 int Trie::find(char* s, int len) {
-    int t = 0, u = 0;
+    int u = 0;
     for(int i=0; i<len; ++i) {
         int c = idx(s[i]);
         if (!ch[u][c]) return -1;
@@ -56,6 +65,14 @@ void Trie::del(char* s, int len) {
     fds[u] = -1;
 }
 
+Server::Server() {
+    trie = new Trie;
+}
+
+Server::~Server() {
+    delete trie;
+}
+
 int Server::start() {
     // re-init, close fds
     if (lsnfd) close(lsnfd);
@@ -64,7 +81,7 @@ int Server::start() {
     if (epollfd) close(epollfd);
 
     // clear db
-    trie.clear();
+    trie->clear();
     fd2str.clear();
 
     setup_listen();    
@@ -84,7 +101,7 @@ int Server::run_concurrent(Mfunc f) {
 }
 
 int Server::setnonblocking(int fd) {
-    int flg, s;
+    int flg;
     flg = fcntl(fd, F_GETFL, 0);
     if (flg == -1) {
         buginfo("Fuck you.\n");
@@ -244,7 +261,7 @@ int Server::get_namelist(int sock, char* buf, int& offset, vector<int>& ans) {
     for(int i=strst; i<strst+sz; ) {
         int j = i+1;
         while(j<strst+sz && buf[j]!=0) ++j;
-        int cfd = trie.find(buf+i, j-i); 
+        int cfd = trie->find(buf+i, j-i); 
         if (cfd > 0) tfds.insert(cfd);
     }
         
@@ -268,7 +285,7 @@ int Server::del_fdinfo(int fd) {
     if (fd2str.count(fd) == 0) return 0;
     auto c = fd2str.find(fd);
     char* p = c->second;
-    trie.del(p, strlen(p)); 
+    trie->del(p, strlen(p)); 
     fd2str.erase(c);
     return 0;
 }
@@ -300,13 +317,14 @@ int Server::process_reg(int sock, char* buf, int buf_len, int offset) {
     }
 
     // update information
-    trie.insert(buf+nast, nasz, sock);
+    trie->insert(buf+nast, nasz, sock);
     char* str = (char*) malloc(nasz);
     copy(buf+nast, buf+nast+nasz, str);
     fd2str.insert(make_pair(sock, str));
    
     return 0;
 }
+
 
 int Server::process_msg(int sock, char* buf, int buf_len, int offset) {
     vector<int> name_fds;

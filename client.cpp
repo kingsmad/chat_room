@@ -14,8 +14,7 @@
 #include <cstring>
 #include <sys/sendfile.h>
 using namespace std;
-const bool debug = false;
-void buginfo(const char* f, ...) {if(!debug)return;va_list al; va_start(al, f);vprintf(f, al);va_end(al);}
+extern void buginfo(const char* f, ...);
 
 int Client::file_size(int fd) {
     struct stat s;
@@ -67,7 +66,7 @@ int Client::create_and_connect(const char* s, int len, int port) {
     return 0;
 }
 
-void Client::set_namelist(char* buf, int& offset, vector<const char*>& namev) {
+void Client::set_namelist(char* buf, int& offset, vector<char*>& namev) {
     int naszst = offset;
     offset += 4;    
     int nvst = offset;
@@ -81,7 +80,7 @@ void Client::set_namelist(char* buf, int& offset, vector<const char*>& namev) {
     set_uint32(buf+naszst, offset-nvst);
 }
 
-int Client::send_file(const char* s, int len, bool block, vector<const char*>& namev) {
+int Client::send_file(const char* s, int len, bool block, vector<char*>& namev) {
     /*The header of the file-msg is fixed to be 
      * less than buf_size*/
     assert(len == strlen(s));
@@ -128,7 +127,7 @@ int Client::send_file(const char* s, int len, bool block, vector<const char*>& n
 }
 
 
-int Client::send_msg(const char* s, int len, bool block, vector<const char*>& namev) {
+int Client::send_msg(const char* s, int len, bool block, vector<char*>& namev) {
     /*The header of the file-msg is fixed to be 
      * less than buf_size*/
     char* buf = (char*)malloc(buf_size*2);
