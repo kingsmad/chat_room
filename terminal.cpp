@@ -125,13 +125,17 @@ void Terminal::parseClient(vector<string>& v) {
 
 void Terminal::mblock2raw(vector<const char*>& res) {
     for (set<string>::iterator itor = mblock.begin(); itor != mblock.end(); ++itor){
-        res.push_back(*itor->c_str());
+        char* tmp = (char*)malloc(sizeof(*itor));
+        res.push_back(tmp);
+        free(tmp);
     }
 }
 
 void Terminal::mblock_bc2raw(vector<const char*>& res) {
     for (set<string>::iterator itor = mblock_bc.begin(); itor != mblock.end(); ++itor){
-        res.push_back(*itor->c_str());
+        char* tmp = (char*)malloc(sizeof(*itor));
+        res.push_back(tmp);
+        free(tmp);
     }
 }
 

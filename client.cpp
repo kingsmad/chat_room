@@ -71,7 +71,7 @@ void Client::set_namelist(char* buf, int& offset, vector<const char*>& namev) {
     int naszst = offset;
     offset += 4;    
     int nvst = offset;
-    for (char* c: namev) {
+    for (const char* c: namev) {
         int tlen = strlen(c)+1;
         copy(c, c+tlen, buf+offset);
         offset += tlen;
