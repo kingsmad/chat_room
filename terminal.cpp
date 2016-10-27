@@ -1,6 +1,7 @@
 #include "terminal.h"
 #include <vector>
 #include <string>
+#include <cstring>
 using namespace std;
 
 int Terminal::run() {
@@ -12,7 +13,7 @@ int Terminal::run() {
     return 0;
 }
 
-int terminal::parse() {
+int Terminal::parse() {
     status = 0;
     vector<string> v;
     getstr(v);
@@ -20,8 +21,8 @@ int terminal::parse() {
         if (v.size() < 2) 
             cout << "Correct usage: set server or set client 'IP address' 'port#' 'client name'"<< endl;
         else if ((v[1] == "client") && (v.size() == 5)) {
-            client.create_and_connect(v[2], strlen(v[2]), stoi(v[3]));
-            client.send_reg(v[4].c_str, int len);
+            client.create_and_connect(v[2].c_str(), v[2].size(), stoi(v[3]));
+            client.send_reg(v[4].c_str(), v[4].size());
         } else if (v[1] == "server") {
             server.start();
         } else {
@@ -43,7 +44,7 @@ int terminal::parse() {
     return 0;
 }
 
-void Terminal::parseClient() {
+void Terminal::parseClient(vector<string>& v) {
     if (v[0] == "block") {
         if (v.size() < 3)
             cout << "Correct usage: block remove/add ... " << endl;
@@ -63,13 +64,13 @@ void Terminal::parseClient() {
             cout << "Correct usage: block remove/add ... " << endl;
         }
     } else if (v[0] == "broadcast") {
-        if ((v.size() < 3)
+        if (v.size() < 3)
             cout << "Correct usage: broadcast file/msg ..." << endl;
         // get blocked users
         vector<char*> res;
         mblock2raw(res);
         char* p = (char*)malloc(v[2].size()+1);
-        int slen = strlen(v[1]);
+        int slen = v[1].size();
         if(v.size() >= 3){
             if (v[1] == "file") {
                 if (v.size() > 3) 
@@ -92,7 +93,7 @@ void Terminal::parseClient() {
         int start = 3;
         str2raw(v, res, start);
         char* p = (char*)malloc(v[2].size()+1);
-        int slen = strlen(v[1]);
+        int slen = v[1].size();
         if(v.size() == 4){
             if (v[1] == "file")
                 client.send_file(p, slen, false, res);
@@ -109,7 +110,7 @@ void Terminal::parseClient() {
         vector<char*> res;
         mblock_bc2raw(res);
         char* p = (char*)malloc(v[2].size()+1);
-        int slen = strlen(v[1]);
+        int slen = v[1].size();
         if(v.size() == 4){
             if(v[1] == "file"){
                 client.send_file(p, slen, true, res);
@@ -123,23 +124,20 @@ void Terminal::parseClient() {
 }
 
 void Terminal::mblock2raw(vector<char*>& res) {
-    for (int i = 0; i < mblock.size(); i++){
-        const char* tmp = mblock[i].c_str();
-        res.push_back(tmp);
+    for (set<string>::iterator itor = mblock.begin(); itor != mblock.end(); ++itor){
+        res.push_back(*itor->c_str());
     }
 }
 
 void Terminal::mblock_bc2raw(vector<char*>& res) {
-    for (int i = 0; i < mblock_bc.size(); i++){
-        const char* tmp = mblock_bc[i].c_str();
-        res.push_back(tmp);
+    for (set<string>::iterator itor = mblock_bc.begin(); itor != mblock.end(); ++itor){
+        res.push_back(*itor->c_str());
     }
 }
 
-void Terminal::str2raw(vector<string> v, vector<char*>& res, start) {
+void Terminal::str2raw(vector<string> v, vector<char*>& res, int start) {
     for(int i = start; i < v.size(); i++){
-        const char* tmp = v[i].c_str();
-        res.push_back(tmp);
+        res.push_back(v[i].c_str());
     }
 }
 
