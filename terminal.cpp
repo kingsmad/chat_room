@@ -67,7 +67,7 @@ void Terminal::parseClient(vector<string>& v) {
         if (v.size() < 3)
             cout << "Correct usage: broadcast file/msg ..." << endl;
         // get blocked users
-        vector<char*> res;
+        vector<const char*> res;
         mblock2raw(res);
         char* p = (char*)malloc(v[2].size()+1);
         int slen = v[1].size();
@@ -89,7 +89,7 @@ void Terminal::parseClient(vector<string>& v) {
         if (v.size() != 4) 
             cout << "Correct usage: unicast file/msg 'file name/message' 'receiver name...'" << endl;
         // get dest-users and para v[2]
-        vector<char*> res;
+        vector<const char*> res;
         int start = 3;
         str2raw(v, res, start);
         char* p = (char*)malloc(v[2].size()+1);
@@ -107,7 +107,7 @@ void Terminal::parseClient(vector<string>& v) {
         if (v.size() !=4)
             cout << "Correct usage: blockcast file/msg 'file name/message 'block client name'" << endl;
         mblock_bc.insert(v[3]);
-        vector<char*> res;
+        vector<const char*> res;
         mblock_bc2raw(res);
         char* p = (char*)malloc(v[2].size()+1);
         int slen = v[1].size();
@@ -123,19 +123,19 @@ void Terminal::parseClient(vector<string>& v) {
     }
 }
 
-void Terminal::mblock2raw(vector<char*>& res) {
+void Terminal::mblock2raw(vector<const char*>& res) {
     for (set<string>::iterator itor = mblock.begin(); itor != mblock.end(); ++itor){
         res.push_back(*itor->c_str());
     }
 }
 
-void Terminal::mblock_bc2raw(vector<char*>& res) {
+void Terminal::mblock_bc2raw(vector<const char*>& res) {
     for (set<string>::iterator itor = mblock_bc.begin(); itor != mblock.end(); ++itor){
         res.push_back(*itor->c_str());
     }
 }
 
-void Terminal::str2raw(vector<string> v, vector<char*>& res, int start) {
+void Terminal::str2raw(vector<string> v, vector<const char*>& res, int start) {
     for(int i = start; i < v.size(); i++){
         res.push_back(v[i].c_str());
     }
