@@ -1,5 +1,6 @@
 #include <iostream>
 #include <thread>
+#include <errno.h>
 #include <chrono>
 #include <unistd.h>
 #include <assert.h>
@@ -19,6 +20,7 @@
 extern void buginfo(const char* f, ...);
 extern int set_uint32(char* s, int k);
 extern int get_uint32(char* s);
+extern int ksrecieve(int fd, int sock, int tsz);
 
 using namespace std;
 
@@ -464,40 +466,53 @@ int Server::process_file(int sock, char* buf, int offset) {
 
     // save file
     int filest = offset;
-    int file = open(buf+namest, O_CREAT | O_TRUNC | O_WRONLY);
+    int file = open(buf+namest, O_CREAT | O_TRUNC | O_RDWR, 0644);
     if (file < 0) {
         buginfo("\n Failed to open file: %s\n", buf+namest);
         return -1;
     }
-    sendfile(file, sock, 0, tsz);
-    close(file);
+    if (ksrecieve(file, sock, tsz) < 0) {
+        perror("Save file failed");
+    }
 
     // assemble segment && send file
-    file = open(buf+namest, O_RDONLY, 0644);
+    file = open(buf+namest, O_RDONLY, 0666);
     assert(tsz == file_size(file));
     if (file < 0) {
         buginfo("\n Re-open file %s error!\n", buf+namest);
         return -1;
     }
+
+    // construct headers
+    char* obuf = (char*)malloc(buf_size);
+    offset = 0;
+    memset(obuf, 0, buf_size);
+    obuf[offset++] = 2; // file type
+
+    // source name size
+    char* p = fd2str[sock];
+    int plen = strlen(p)+1;
+    set_uint32(obuf+offset, plen); 
+    offset += 4;
+
+    // source name
+    copy(p, p+plen, obuf+offset);
+    offset += plen;
+
+    // filesz 4 bytes and filename 4 bytes
+    copy(buf+fszst, buf+filest, obuf+offset); 
+    offset += filest - fszst;
+
     for (int fd: name_fds) { // can be concurrent in future;
         int optval = 1;
         setsockopt(fd, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));
          
-        write(fd, buf, 1); // 1 byte type
-
-        // add sender's name
-        char* p = fd2str[sock];
-        assert(p!=0);
-        int plen = strlen(p)+1;
-        int a = htonl(plen);
-        write(fd, &a, 4); // source-name-size 
-        write(fd, p, plen); // source-name
-
-        // filesz 4 bytes and filename 4 bytes
-        write(fd, buf+fszst, filest-fszst); 
+        // write header
+        write(fd, obuf, offset);
 
         // file content
-        sendfile(fd, file, 0, htonl(tsz)); 
+        off_t stp = 0;
+        sendfile(fd, file, &stp, tsz); 
 
         optval = 0;
         setsockopt(fd, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));

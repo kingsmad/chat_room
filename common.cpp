@@ -4,12 +4,14 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <stdarg.h>
+#include <unistd.h>
 #include <iostream>
 #include <fcntl.h>
 #include <cstdio>
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include "common.h"
 /*const int MAX_EVENTS = 100;
 const int MAX_THREAD_NUMS = 10;
 const int maxnode = 1e3+10;
@@ -69,3 +71,20 @@ int get_uint32(char* s) {
     return ntohl(tmp.d);
 }
 
+int ksrecieve(int fd, int sock, int tsz) {
+    buginfo("in ksrecieve, tsz is: %d\n", tsz);
+    char* buf = (char*) malloc(buf_size);
+    memset(buf, 0, buf_size);
+    
+    while(tsz) {
+        int cnt = read(sock, buf, min(tsz, buf_size));
+        tsz -= cnt;
+        if (write(fd, buf, cnt) < 0) {
+            perror("ksrecieve erro:");
+            return -1;
+        }
+    }
+
+    free(buf);
+    return 0;
+}

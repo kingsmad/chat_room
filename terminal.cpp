@@ -85,10 +85,14 @@ void Terminal::parseClient(vector<string>& v) {
             cout << "Correct usage: block remove/add 'username' " << endl;
         }
     } else if (v[0] == "broadcast") {
-        if (v.size() < 3)
+        if (v.size() < 3) {
             cout << "Correct usage: broadcast file/msg ..." << endl;
-        if (v[1] == "file" && v.size() > 3) 
+            return;
+        }
+        if (v[1] == "file" && v.size() > 3) {
             cout << "Only support 1 file 1 time" << endl;
+            return;
+        }
         if (v[1] == "file" || (v[1] == "msg" && v.size()==3)) {
             if (broadcast_hdl(v) < 0)
                 cout << "Failed on broadcast" << endl;
@@ -96,13 +100,18 @@ void Terminal::parseClient(vector<string>& v) {
         else 
             cout << "Correct usage: broadcast file/msg ..." << endl;
     } else if (v[0] == "unicast") {
-        if (v.size()<4 || (v[1] != "msg" && v[1] != "file")) 
-            cout << "Correct usage: unicast file/msg 'file name/message' 'receiver name...'" << endl;
+        if (v.size()<4 || (v[1] != "msg" && v[1] != "file")) {
+            cout << "Correct usage: unicast file/msg \
+                'file name/message' 'receiver name...'" << endl;
+            return;
+        }
         if (unicast_hdl(v) < 0) 
             cout << "Failed on unicast" << endl;
     } else if (v[0] == "blockcast"){
-        if (v.size()<4 || (v[1] !="msg" && v[1]!="file"))
+        if (v.size()<4 || (v[1] !="msg" && v[1]!="file")) {
             cout << "Correct usage: blockcast file/msg 'file name/message 'block client name'" << endl;
+            return;
+        }
         if (blockcast_hdl(v) < 0) 
             cout << "Failed on blockcast" << endl;
     }

@@ -16,6 +16,7 @@
 using namespace std;
 extern void buginfo(const char* f, ...);
 extern int setnonblocking(int fd);
+extern int ksrecieve(int fd, int sock, int tsz);
 
 int Client::file_size(int fd) {
     struct stat s;
@@ -142,7 +143,10 @@ int Client::send_file(const char* s, int len, bool block, vector<char*>& namev) 
     setsockopt(sock, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));
 
     write(sock, buf, offset); 
-    sendfile(sock, file, 0, file_sz);
+    if (sendfile(sock, file, 0, file_sz) < 0 ) {
+        buginfo("client send file failed, file_sz is : %d\n", file_sz);
+        return -1;
+    }
 
     optval = 0;
     setsockopt(sock, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));
@@ -241,10 +245,10 @@ int Client::process() {
     memset(buf, 0, buf_size);
 
     offset += read(sock, buf, 1); 
-    assert(offset == 1);
+    if (offset != 1) return -1;
     if (buf[0] == 1) { // it's message
         process_msg(buf, offset);
-    } else if (buf[1] == 2) { // it's file
+    } else if (buf[0] == 2) { // it's file
         process_file(buf, offset);
     }     
     buginfo("End processing\n");
@@ -252,6 +256,7 @@ int Client::process() {
 }
 
 void Client::process_file(char* buf, int offset) {
+    buginfo("recieving file...\n");
     // get source name-size: 4 bytes
     int naszst = offset;
     while(offset < naszst+4)
@@ -276,14 +281,14 @@ void Client::process_file(char* buf, int offset) {
         offset += read(sock, buf+offset, fnamevst+fnamesz-offset);
 
     // open with this file
-    int file = open(buf+fnamevst, O_CREAT | O_TRUNC | O_WRONLY);
+    int file = open(buf+fnamevst, O_CREAT | O_TRUNC | O_RDWR, 0644);
     if (file < 0) {
         printf("Got file: %s, but seems sth wrong in \
                 creating it...", buf+fnamevst);
         return;
     }
     
-    sendfile(file, sock, 0, filesz);
+    ksrecieve(file, sock, filesz);
 
     // print file info
     printf("Got file from %s:\n %s %d bytes\n", buf+nvst, \

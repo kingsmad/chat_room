@@ -14,3 +14,4 @@ char* str2raw(string& s);
 int setnonblocking(int fd);
 int set_uint32(char* s, int k);
 int get_uint32(char* s);
+int ksrecieve(int fd, int sock, int tsz);
