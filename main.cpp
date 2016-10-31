@@ -1,7 +1,6 @@
 /*************************************************************************
     > File Name: main.cpp
 ************************************************************************/
-const bool debug = false;
 #include <cstdio>
 #include <iostream>
 #include <cmath>
@@ -30,13 +29,12 @@ typedef pair<int, int> PII;
 #define lc(o) (o<<1)
 #define rc(o) (o<<1|1)
 ll powmod(ll a,ll b, ll MOD) {ll res=1;a%=MOD;for(;b;b>>=1){if(b&1)res=res*a%MOD;a=a*a%MOD;}return res;}
-void buginfo(const char* f, ...) {if(!debug)return;va_list al; va_start(al, f);vprintf(f, al);va_end(al);}
 /*------------------ head-------------------*/
 
 #include "terminal.h"
 
 int main() {
-    Terminal terminal;
-    terminal.run();
+    Terminal t;
+    t.run();
 }
 

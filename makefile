@@ -1,20 +1,23 @@
-OBJS = terminal.o server.o client.o main.o
+OBJS = terminal.o main.o client.o server.o common.o
 CC = clang++ 
 DEBUG = -g
 CFLAGS = -Wall -c $(DEBUG) -std=c++11
-LFLAGS = -Wall $(DEBUG)
+LFLAGS = -Wall $(DEBUG) -pthread
 
 chat : $(OBJS)
 	$(CC) $(LFLAGS) $(OBJS) -o chat 
 
-client.o: client.h
-	$(CC) $(CFLAGS) client.cpp
-server.o: server.h
-	$(CC) $(CFLAGS) server.cpp
-terminal.o: terminal.h server.o client.o
-	$(CC) $(CFLAGS) terminal.cpp
-main.o: terminal.o
-	$(CC) $(CFLAGS) main.cpp 
+client.o: client.cpp client.h
+	$(CC) $(CFLAGS) -c client.cpp
+
+server.o: server.cpp server.h
+	$(CC) $(CFLAGS) -c server.cpp
+
+terminal.o: terminal.cpp terminal.h client.h server.h common.h
+	$(CC) $(CFLAGS) -c terminal.cpp
+
+main.o: terminal.h main.cpp
+	$(CC) $(CFLAGS) -c main.cpp
 
 clean:
 	    \rm *.o chat 

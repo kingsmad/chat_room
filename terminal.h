@@ -11,16 +11,16 @@ private:
     set<string> mblock;
     set<string> mblock_bc;
     int status; //0-non-set 1-server 2-client
-    char buf[1024];
-    void getstr(vector<string>& v);
     void mblock2raw(vector<char*>& res);
     void mblock_bc2raw(vector<char*>& res);
-    void str2raw(vector<string> v, vector<char*>& res, int start);
-
 private:
-    int parse();
+    int parse(string line);
     void parseClient(vector<string>& v);
+    int blockcast_hdl(vector<string>& v);
+    int unicast_hdl(vector<string>& v);
+    int broadcast_hdl(vector<string>& v);
 public:
     int run();
+    Terminal();
 
 };
