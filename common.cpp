@@ -22,7 +22,7 @@ const int buf_size = 1024;*/
 
 using namespace std;
 
-const int debug = true;
+int debug = false;
 void buginfo(const char* f, ...) {if(!debug)return;va_list al; va_start(al, f);vprintf(f, al);va_end(al);}
 
 char* str2raw(string& s) {

@@ -158,7 +158,7 @@ int Server::local_ip_address(struct sockaddr_in* res, int port) {
     cur_addr->sin_family = AF_INET;
     char s[48];
     inet_ntop(AF_INET, &cur_addr->sin_addr.s_addr, s, 30);
-    printf("local ip addrss is: %s\n", s);
+    buginfo("local ip addrss is: %s\n", s);
     
     //memcpy(res, cur_addr, sizeof(struct sockaddr_in));
     memcpy(&res->sin_addr.s_addr, &cur_addr->sin_addr.s_addr, sizeof(cur_addr->sin_addr.s_addr));
@@ -182,7 +182,7 @@ int Server::setup_listen () {
     sv_addr.sin_port = htons((unsigned short)def_port);
     sv_addr.sin_family = AF_INET;
     if (local_ip_address(&sv_addr, def_port) < 0) {
-        printf("\nFailed to get IP address, check your network!\n");
+        buginfo("\nFailed to get IP address, check your network!\n");
         return -1;
     }
 
@@ -191,12 +191,12 @@ int Server::setup_listen () {
         printf("\n Error in Binding lsnfd...\n");
         memset(s, 0, 50);
         inet_ntop(AF_INET, &sv_addr.sin_addr, s, 30);
-        printf("local ip addrss is: %s\n", s);
+        buginfo("local ip addrss is: %s\n", s);
         return -1;
     }
 
     if (listen(lsnfd, 10) < 0) {
-        buginfo("\nFailed in listening...\n");
+        printf("\nFailed in listening...\n");
         return -1;
     }
 
@@ -340,7 +340,7 @@ int Server::get_namelist(int sock, char* buf, int& offset, vector<int>& ans) {
         string z = string(buf+i);
         i += z.size();
 
-        cout << "z is: " << z << endl;
+        //cout << "z is: " << z << endl;
         auto c = trie.find(z);
         if (c != trie.end()) tfds.insert(c->second);
         
@@ -369,6 +369,7 @@ int Server::del_fdinfo(int fd) {
     char* p = c->second;
     trie.erase(string(p));
     fd2str.erase(c);
+    free(p);
     return 0;
 
 }
@@ -518,6 +519,7 @@ int Server::process_file(int sock, char* buf, int offset) {
         setsockopt(fd, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));
     }
 
+    free(obuf);
     buginfo("End processing file.\n");
     return 0;
 }

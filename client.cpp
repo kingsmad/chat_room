@@ -228,7 +228,7 @@ void* Client::monitor() {
                 close(events[i].data.fd);
                 continue;
             } else if (events[i].data.fd == sock) { // new connection coming
-                 printf("New data arrived!\n");
+                 buginfo("New data arrived!\n");
                 if (process() < 0)
                     printf("Peer shutdown or rogue data\n");
             } else {
@@ -290,6 +290,7 @@ void Client::process_file(char* buf, int offset) {
     
     ksrecieve(file, sock, filesz);
 
+    close(file);
     // print file info
     printf("Got file from %s:\n %s %d bytes\n", buf+nvst, \
             buf+fnamevst, filesz);

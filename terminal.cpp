@@ -11,6 +11,7 @@
 using namespace std;
 
 extern char* str2raw(string& s);
+extern int debug;
 
 Terminal::Terminal() {
     status = 0;
@@ -46,18 +47,28 @@ int Terminal::parse(string line) {
         } else if (v[1] == "server") {
             server.start();
             status = 1;
+        } else if (v[1] == "debug") {
+            if (v.size() < 3) {
+                cout << "Correct usage: set debug true/false" << endl;
+                return 0;
+            } 
+            if (v[2] == "true") debug = true;
+            else if (v[2] == "false") debug = false;
+            else {
+                cout << "Correct usage: set debug true/false" << endl;
+                return 0;
+            }
         } else {
             cout << "Correct usage: set server or set client 'IP address' 'port#' 'client name'" << endl;
         }
-    } else if(status == 1){
-        if(v[0] == "stop"){
+    } else if(status == 1) {
+        if(v[0] == "stop") {
             server.stop();
             return -1;
         }
-    } else if(status == 2){
-        if(v[0] == "stop"){
+    } else if(status == 2) {
+        if(v[0] == "stop")
             return -1;
-        }
         parseClient(v);
     } else{
         cout << "wrong input" << endl;
