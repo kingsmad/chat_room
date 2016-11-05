@@ -19,6 +19,7 @@ private:
     int blockcast_hdl(vector<string>& v);
     int unicast_hdl(vector<string>& v);
     int broadcast_hdl(vector<string>& v);
+    void correctUsage();
 public:
     int run();
     Terminal();
