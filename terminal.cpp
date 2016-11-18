@@ -49,7 +49,10 @@ int Terminal::run() {
     while(true) {
         string line;
         getline(cin, line, '\n');
-
+        if(line.empty() || line.at(0) == ' '){
+            correctUsage();
+            continue;
+        }
         int res = parse(line);
 
         if (res == -1) break;
@@ -60,21 +63,21 @@ int Terminal::run() {
 int Terminal::parse(string line) {
     stringstream ss(line);
     string tmp; vector<string> v;
-    string msgtmp;
     while(ss >> tmp) {
         string::iterator bg = tmp.begin();
-        string::reverse_iterator ed = tmp.rbegin();
+        string::reverse_iterator ed = tmp.rbegin() + 1;
         if (*bg == '\'') {
             tmp.erase(tmp.begin());
-            if (*ed == '\'')
+            if (*ed == '\''){
                 tmp.erase(tmp.end()-1);
+            }
             else {
-                while(true){
+                string msgtmp;
+                while(ss >> msgtmp){
                     tmp += " ";
-                    ss >> msgtmp;
                     string::reverse_iterator msged = msgtmp.rbegin();
                     if(*msged == '\''){
-                        msgtmp.erase(msgtmp.end() -1);
+                        msgtmp.erase(msgtmp.end() - 1);
                         tmp += msgtmp;
                         break;
                     }
@@ -98,7 +101,15 @@ int Terminal::parse(string line) {
                 cout << "you have already set it to client" << endl;
                 return 0;
             }
-            client.create_and_connect(v[2].c_str(), v[2].size(), stoi(v[3]));
+            if(stoi(v[3])>65535){
+                cout<< "port # too large" << endl;
+                return 0;
+            }
+            if(client.create_and_connect(v[2].c_str(), v[2].size(), stoi(v[3])) == -1){
+                cout << "create connection failed, please input the correct IP address or Port #" << endl;
+                return 0;
+            }
+
             client.send_reg(v[4].c_str(), v[4].size());
             status = 2;
         } else if (v[1] == "server") {
@@ -134,7 +145,7 @@ int Terminal::parse(string line) {
         } else {
             cout << "You can't do anything except stop" << endl;
         }
-    } else if(status == 2) {
+    }   else if(status == 2) {
         if(v[0] == "stop")
             return -1;
         parseClient(v);
@@ -181,8 +192,9 @@ void Terminal::parseClient(vector<string>& v) {
                 correctUsage();
             }
         }
-        else 
+        else {
             correctUsage();
+        }
     } else if (v[0] == "unicast") {
         if (v.size()<4 || (v[1] != "msg" && v[1] != "file")) {
             correctUsage();
