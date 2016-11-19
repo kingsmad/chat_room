@@ -21,9 +21,9 @@ void Terminal::correctUsage() {
     cout << "Correct usage sample: " << "block remove/add [client name1] [client name 2] ..." << endl
          << "              " << "broadcast msg ['message content']" << endl
          << "              " << "broadcast file [file name]" << endl
-         << "              " << "unicast msg ['message content'] [client name 1] [client name 2] ..." << endl
+         << "              " << "unicast msg ['message content']/[message content(with no space)] [client name 1] [client name 2] ..." << endl
          << "              " << "unicast file [file name] [client name 1] [client name 2]" << endl
-         << "              " << "blockcast msg ['message content'] [client name 1] [client name 2] ..." << endl
+         << "              " << "blockcast msg ['message content']/[message content(with no space)] [client name 1] [client name 2] ..." << endl
          << "              " << "blockcast file [file name] [client name 1] [client name 2] ..." << endl;
 }
 
@@ -77,6 +77,25 @@ int Terminal::parse(string line) {
                     tmp += " ";
                     string::reverse_iterator msged = msgtmp.rbegin();
                     if(*msged == '\''){
+                        msgtmp.erase(msgtmp.end() - 1);
+                        tmp += msgtmp;
+                        break;
+                    }
+                    tmp += msgtmp;
+                }
+            }
+        }
+        if (*bg == '\"') {
+            tmp.erase(tmp.begin());
+            if (*ed == '\"'){
+                tmp.erase(tmp.end()-1);
+            }
+            else {
+                string msgtmp;
+                while(ss >> msgtmp){
+                    tmp += " ";
+                    string::reverse_iterator msged = msgtmp.rbegin();
+                    if(*msged == '\"'){
                         msgtmp.erase(msgtmp.end() - 1);
                         tmp += msgtmp;
                         break;

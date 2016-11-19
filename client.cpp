@@ -152,7 +152,7 @@ int Client::send_file(const char* s, int len, bool block, vector<char*>& namev) 
     setsockopt(sock, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int));
 
     free(buf);
-
+    cout << "sending file successfully!" << endl;
     return 0;
 }
 
@@ -182,7 +182,7 @@ int Client::send_msg(const char* s, int len, bool block, vector<char*>& namev) {
     write(sock, buf, offset);
 
     free(buf);
-
+    cout << "sending message successfully!" << endl;
     buginfo("End send_msg\n");
     return 0;
 }
