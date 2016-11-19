@@ -40,11 +40,11 @@ int Terminal::run() {
          << "unicast: send message or file to a specific client" << endl
          << "blockcast: send message or file to all clients apart from those you specified" << endl
          << "Sample usage: " << "block remove/add [client name1] [client name 2] ..." << endl
-         << "              " << "broadcast msg ['message content']" << endl
+         << "              " << "broadcast msg ['message content']/[message content(with no space)]" << endl
          << "              " << "broadcast file [file name]" << endl
-         << "              " << "unicast msg ['message content'] [client name 1] [client name 2] ..." << endl
+         << "              " << "unicast msg ['message content']/[message content(with no space)] [client name 1] [client name 2] ..." << endl
          << "              " << "unicast file [file name] [client name 1] [client name 2]" << endl
-         << "              " << "blockcast msg ['message content'] [client name 1] [client name 2] ..." << endl
+         << "              " << "blockcast msg ['message content']/[message content(with no space)] [client name 1] [client name 2] ..." << endl
          << "              " << "blockcast file [file name] [client name 1] [client name 2] ..." << endl;
     while(true) {
         string line;
